@@ -1,33 +1,61 @@
-const { ethers } = require("hardhat");
-const { CRYPTODEVS_NFT_CONTRACT_ADDRESS } = require("../constants");
+const hre = require("hardhat");
 
-async function main() {
-  // Deploy the FakeNFTMarketplace contract first
-  const FakeNFTMarketplace = await ethers.getContractFactory(
-    "FakeNFTMarketplace"
-  );
-  const fakeNftMarketplace = await FakeNFTMarketplace.deploy();
-  await fakeNftMarketplace.deployed();
-
-  console.log("FakeNFTMarketplace deployed to: ", fakeNftMarketplace.address);
-
-  // Now deploy the CryptoDevsDAO contract
-  const CryptoDevsDAO = await ethers.getContractFactory("CryptoDevsDAO");
-  const cryptoDevsDAO = await CryptoDevsDAO.deploy(
-    fakeNftMarketplace.address,
-    CRYPTODEVS_NFT_CONTRACT_ADDRESS,
-    {
-      value: ethers.utils.parseEther("0.1"),
-    }
-  );
-  await cryptoDevsDAO.deployed();
-
-  console.log("CryptoDevsDAO deployed to: ", cryptoDevsDAO.address);
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error(error);
-    process.exit(1);
+async function main() {
+  // Deploy the NFT Contract
+  const nftContract = await hre.ethers.deployContract("CryptoDevsNFT");
+  await nftContract.waitForDeployment();
+  console.log("CryptoDevsNFT deployed to:", nftContract.target);
+
+  // Deploy the Fake Marketplace Contract
+  const fakeNftMarketplaceContract = await hre.ethers.deployContract(
+    "FakeNFTMarketplace"
+  );
+  await fakeNftMarketplaceContract.waitForDeployment();
+  console.log(
+    "FakeNFTMarketplace deployed to:",
+    fakeNftMarketplaceContract.target
+  );
+
+  // Deploy the DAO Contract
+  const daoContract = await hre.ethers.deployContract("CryptoDevsDAO", [
+    fakeNftMarketplaceContract.target,
+    nftContract.target,
+  ]);
+  await daoContract.waitForDeployment();
+  console.log("CryptoDevsDAO deployed to:", daoContract.target);
+
+  // Sleep for 30 seconds to let Etherscan catch up with the deployments
+  await sleep(30 * 1000);
+
+  // Verify the NFT Contract
+  await hre.run("verify:verify", {
+    address: nftContract.target,
+    constructorArguments: [],
   });
+
+  // Verify the Fake Marketplace Contract
+  await hre.run("verify:verify", {
+    address: fakeNftMarketplaceContract.target,
+    constructorArguments: [],
+  });
+
+  // Verify the DAO Contract
+  await hre.run("verify:verify", {
+    address: daoContract.target,
+    constructorArguments: [
+      fakeNftMarketplaceContract.target,
+      nftContract.target,
+    ],
+  });
+}
+
+// We recommend this pattern to be able to use async/await everywhere
+// and properly handle errors.
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

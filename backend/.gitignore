@@ -5,12 +5,7 @@ coverage.json
 typechain
 typechain-types
 
-#Hardhat files
+# Hardhat files
 cache
 artifacts
-
-# Lock Files
-package-lock.json
-pnpm-lock.yaml
-yarn.lock
 
